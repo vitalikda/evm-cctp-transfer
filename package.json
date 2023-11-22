@@ -6,16 +6,26 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "typechain": "typechain --target=ethers-v5 --out-dir ./src/typechain ./src/abis/*.json"
   },
   "dependencies": {
     "@t3-oss/env-nextjs": "^0.7.0",
+    "@web3-react/abstract-connector": "^6.0.7",
+    "@web3-react/core": "^8.2.3",
+    "@web3-react/metamask": "^8.2.4",
+    "ethers": "^5.7.2",
+    "eventemitter3": "^5.0.1",
     "next": "^14.0.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@web3-react/types": "^8.2.3",
+    "@ethersproject/abi": "^5.7.0",
+    "@ethersproject/providers": "^5.7.2",
+    "@typechain/ethers-v5": "^11.1.2",
     "@types/eslint": "^8.44.2",
     "@types/node": "^18.16.0",
     "@types/react": "^18.2.33",
@@ -29,6 +39,7 @@
     "prettier": "^3.0.0",
     "prettier-plugin-tailwindcss": "^0.5.1",
     "tailwindcss": "^3.3.3",
+    "typechain": "^8.3.2",
     "typescript": "^5.1.6"
   },
   "ct3aMetadata": {
