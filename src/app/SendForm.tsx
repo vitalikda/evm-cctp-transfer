@@ -12,56 +12,15 @@ import {
 } from "~/typechain";
 import { getAttestation } from "~/utils/attestation";
 import { addressToBytes32, getMessageBytesFromEventLogs } from "~/utils/eth";
-import { pollFunction } from "~/utils/polling";
+import { delay, pollFunction } from "~/utils/polling";
 
-type TX = { message: Bytes; attestation: string };
-
-const Receive = ({ tx }: { tx: TX }) => {
-  const { provider, account, chainId } = useWeb3React();
-
-  const handleReceive = async () => {
-    try {
-      if (!provider) throw new Error("No provider");
-      if (!account) throw new Error("No account");
-      if (!chainId) throw new Error("No chainId");
-
-      const chain = getChain(chainId);
-      if (!chain) throw new Error("Not supported chain");
-      console.log("chain", chain);
-
-      const { messageTransmitter } = chain;
-      // STEP 5: Using the message bytes and signature receive the funds on destination chain and address
-      const signer = provider.getSigner();
-      const messenger = MessageTransmitter__factory.connect(
-        messageTransmitter,
-        signer,
-      );
-      const receiveResponse = await messenger.receiveMessage(
-        tx.message,
-        tx.attestation,
-      );
-      const receiveTx = receiveResponse.hash;
-      console.log("receiveTx", receiveTx);
-
-      alert("Success");
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  return (
-    <div>
-      <button
-        onClick={handleReceive}
-        className="focus:shadow-outline w-fit rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700 focus:outline-none"
-      >
-        Receive
-      </button>
-    </div>
-  );
+type Transaction = {
+  destinationChainId: number;
+  message: Bytes;
+  attestation: string;
 };
 
-const Send = ({ onSuccess }: { onSuccess: (tx: TX) => void }) => {
+const Send = ({ onSuccess }: { onSuccess: (tx: Transaction) => void }) => {
   const { provider, account, chainId } = useWeb3React();
 
   const handelSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -133,6 +92,7 @@ const Send = ({ onSuccess }: { onSuccess: (tx: TX) => void }) => {
       if (!attestation) throw new Error("Attestation failed");
 
       onSuccess({
+        destinationChainId: 420, // TODO: handle target chain,
         message: messageBytes,
         attestation: attestation.attestation,
       });
@@ -176,43 +136,87 @@ const Send = ({ onSuccess }: { onSuccess: (tx: TX) => void }) => {
   );
 };
 
-export const SendForm = () => {
-  const [state, setState] = useState<"send" | "redeem" | "receive">("send");
-  const [tx, setTx] = useState<TX>();
+const Receive = ({ tx }: { tx: Transaction }) => {
+  const { connector, provider, chainId } = useWeb3React();
 
-  const { connector, isActive } = useWeb3React();
-  const destinationChainId = 420; // TODO: handle target chain
+  const handleChangeChain = async () => {
+    await connector.activate(tx.destinationChainId)?.catch((error) => {
+      console.log(error);
+      return;
+    });
+    await delay(3000); // Safety delay to allow for Web3 context to update
+  };
+
+  const handleReceive = async () => {
+    try {
+      if (!provider) throw new Error("No provider");
+
+      const chain = getChain(tx.destinationChainId);
+      if (!chain) throw new Error("Not supported chain");
+
+      const { messageTransmitter } = chain;
+      // STEP 5: Using the message bytes and signature receive the funds on destination chain and address
+      const signer = provider.getSigner();
+      const messenger = MessageTransmitter__factory.connect(
+        messageTransmitter,
+        signer,
+      );
+      const receiveResponse = await messenger.receiveMessage(
+        tx.message,
+        tx.attestation,
+      );
+      const receiveTx = receiveResponse.hash;
+      console.log("receiveTx", receiveTx);
+
+      const receiveReceipt = await pollFunction(
+        () => provider.getTransactionReceipt(receiveTx),
+        (receipt) => receipt?.status === 1,
+      );
+      if (!receiveReceipt) throw new Error("Receive transaction failed");
+
+      alert("Success");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  if (!chainId) return null;
+
+  return (
+    <div>
+      {chainId !== tx.destinationChainId ? (
+        <button
+          onClick={handleChangeChain}
+          className="focus:shadow-outline w-fit rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700 focus:outline-none"
+        >
+          Switch Chain
+        </button>
+      ) : (
+        <button
+          onClick={handleReceive}
+          className="focus:shadow-outline w-fit rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700 focus:outline-none"
+        >
+          Receive
+        </button>
+      )}
+    </div>
+  );
+};
+
+export const SendForm = () => {
+  const [transaction, setTransaction] = useState<Transaction>();
+
+  const { isActive } = useWeb3React();
 
   if (!isActive) return null;
 
   return (
     <>
-      {state === "send" && (
-        <Send
-          onSuccess={(tx) => {
-            setTx(tx);
-            setState("redeem");
-          }}
-        />
+      {!transaction ? (
+        <Send onSuccess={(tx) => setTransaction(tx)} />
+      ) : (
+        <Receive tx={transaction} />
       )}
-      {state === "redeem" && (
-        <div>
-          <button
-            onClick={async () => {
-              await connector.activate(destinationChainId)?.catch((error) => {
-                console.log(error);
-                return;
-              });
-              await new Promise((resolve) => setTimeout(resolve, 3000)); // Safety delay
-              setState("receive");
-            }}
-            className="focus:shadow-outline w-fit rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700 focus:outline-none"
-          >
-            Switch Chain
-          </button>
-        </div>
-      )}
-      {state === "receive" && tx && <Receive tx={tx} />}
     </>
   );
 };

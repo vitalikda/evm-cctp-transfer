@@ -1,3 +1,7 @@
+export async function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function pollFunction<T>(
   fn: () => Promise<T>,
   condition: (result: T) => boolean,
@@ -13,7 +17,7 @@ export async function pollFunction<T>(
     return result;
   }
 
-  await new Promise((resolve) => setTimeout(resolve, interval));
+  await delay(interval);
 
   return pollFunction(fn, condition, interval, maxAttempts, attempt + 1);
 }
